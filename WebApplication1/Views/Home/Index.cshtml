@@ -1,0 +1,17 @@
+﻿@{
+    ViewBag.Title = "Home Page";
+}
+
+<div class="jumbotron">
+    <h1>ASP.NET</h1>
+    <p class="lead">ASP.NET is a free web framework for building great Web sites and Web applications using HTML, CSS and JavaScript.</p>
+    <p><a href="https://asp.net" class="btn btn-primary btn-lg">Learn more &raquo;</a></p>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <h2>Click the below button to list the folders and files from your google drive</h2>
+        <input id="Button1" type="button" value="List files from Google Drive" onclick="location.href='@Url.Action("drive", "Home")'"  class="btn btn-success" />
+    </div>
+    
+</div>

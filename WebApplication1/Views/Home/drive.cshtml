@@ -1,0 +1,10 @@
+﻿@model WebApplication1.Models.MyStringModel
+
+@{
+    ViewBag.Title = "drive";
+}
+
+<h2>drive</h2>
+
+@Html.TextAreaFor(m=>m.MyString, 10, 50, htmlAttributes: new { @class = "form-control", style = "width: 100%; max-width: 100%;" } )
+
