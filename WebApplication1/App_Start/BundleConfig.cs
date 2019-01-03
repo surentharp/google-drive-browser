@@ -23,8 +23,13 @@ namespace WebApplication1
                       "~/Scripts/bootstrap.js"));
 
             bundles.Add(new StyleBundle("~/Content/css").Include(
+                "~/Content/gijgo/combined/gijgo.css",
                       "~/Content/bootstrap.css",
                       "~/Content/site.css"));
+
+            bundles.Add(new ScriptBundle("~/bundles/gijgo").Include(
+          "~/Scripts/gijgo/combined/gijgo.js"));
+
         }
     }
 }
