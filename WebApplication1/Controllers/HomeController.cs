@@ -22,7 +22,6 @@ namespace WebApplication1.Controllers
 {
     public class HomeController : Controller
     {
-        static string intend = "     ";
         static string[] Scopes = { DriveService.Scope.DriveReadonly };
         static string ApplicationName = "Drive API .NET Quickstart";
 
@@ -70,7 +69,7 @@ namespace WebApplication1.Controllers
                     "user",
                     CancellationToken.None,
                     new FileDataStore(credPath, true)).Result;
-                Console.WriteLine("Credential file saved to: " + credPath);
+                //Console.WriteLine("Credential file saved to: " + credPath);
             }
 
             // Create Drive API service.
@@ -80,19 +79,71 @@ namespace WebApplication1.Controllers
                 ApplicationName = ApplicationName,
             });
 
-            StringBuilder sb = new StringBuilder();
+            List<FolderListClass> _folders = FolderStructureMethod(service);
+
+            return this.Json(_folders, JsonRequestBehavior.AllowGet);
+        }
+
+        private List<FolderListClass> FolderStructureMethod(DriveService service)
+        {
+            List<FolderTempClass> _foldersObject = new List<FolderTempClass>();
+
+            FilesResource.ListRequest listRequest2 = service.Files.List();
+            listRequest2.PageSize = 10;
+            listRequest2.Fields = "nextPageToken, files(id, name, parents, shared)";
+            listRequest2.Q = "'root' in parents";
+
+            String rootID = listRequest2.Execute().Files[0].Parents[0];
+
+            bool getFiles = true;
+            string pageToken = "";
+
+            while (getFiles)
+            {
+                // Define parameters of request.
+                FilesResource.ListRequest listRequest = service.Files.List();
+                listRequest.PageSize = 1000;
+                listRequest.Fields = "nextPageToken, files(id, name, parents, shared, mimeType)";
+                listRequest.Q = "mimeType = 'application/vnd.google-apps.folder'";
+
+                if (pageToken != "")
+                    listRequest.PageToken = pageToken;
+
+                // List files.
+                IList<Google.Apis.Drive.v3.Data.File> files = listRequest.Execute()
+                    .Files;
+
+                pageToken = listRequest.Execute().NextPageToken;
+
+                pageToken = pageToken ?? "";
+
+                pageToken = pageToken.Trim();
+
+                if (files != null && files.Count > 0)
+                {
+                    foreach (var file in files)
+                    {
+                        if (file.Parents != null)
+                        {
+                            //Console.WriteLine("{0} ({1}) =>{2}<= Parent: {3}", file.Name, file.Id, file.Shared, file.Parents[file.Parents.Count - 1]);
+                            _foldersObject.Add(new FolderTempClass { FolderID = file.Id, FolderName = file.Name, ParentID = file.Parents[0], MimeType = file.MimeType });
+                        }
+                    }
+                }
+
+                if (pageToken == "")
+                    getFiles = false;
+                else
+                    getFiles = true;
+            }
+
             List<FolderListClass> _folders = new List<FolderListClass>();
 
             _folders.Add(new FolderListClass { id = "root", text = "root" });
 
-            foreach (var Res in ResFromFolder(service, "root").ToList())
-                getHierarchy(Res, service, sb, _folders[0].children);
-
-            ss.MyString = sb.ToString();
-
-            var jj = JsonConvert.SerializeObject(_folders);
-
-            return this.Json(_folders, JsonRequestBehavior.AllowGet);
+            foreach (var Res in ResFromFolder(_foldersObject, rootID).ToList())
+                getHierarchy(Res, _folders[0].children, _foldersObject);
+            return _folders;
         }
 
         public ActionResult GetAllFiles(string id)
@@ -115,7 +166,7 @@ namespace WebApplication1.Controllers
                     "user",
                     CancellationToken.None,
                     new FileDataStore(credPath, true)).Result;
-                Console.WriteLine("Credential file saved to: " + credPath);
+                //Console.WriteLine("Credential file saved to: " + credPath);
             }
 
             // Create Drive API service.
@@ -124,6 +175,7 @@ namespace WebApplication1.Controllers
                 HttpClientInitializer = credential,
                 ApplicationName = ApplicationName,
             });
+
 
             List<string> _files = new List<string>();
 
@@ -181,28 +233,35 @@ namespace WebApplication1.Controllers
 
         #region New Logic
 
-        public static List<Google.Apis.Drive.v3.Data.File> ResFromFolder(DriveService service, string folderId)
+        public List<FolderTempClass> ResFromFolder(List<FolderTempClass> _folderObject, string folderId)
         {
-            //var request = service.Files.List(folderId);
-            var request = service.Files.List();
-            request.PageSize = 1000;
-            request.Fields = "nextPageToken, files(id, name, parents, mimeType)";
-            request.Q = String.Format("'{0}' in parents and mimeType = 'application/vnd.google-apps.folder'", folderId);
 
-            List<Google.Apis.Drive.v3.Data.File> TList = new List<Google.Apis.Drive.v3.Data.File>();
-            //IList<Google.Apis.Drive.v3.Data.File> files = request.Execute().Files;
-            do
+            List<FolderTempClass> TList = new List<FolderTempClass>();
+
+            var children = (from k in _folderObject where k.ParentID == folderId select k);
+            foreach (var child in children)
             {
-                var children = request.Execute();
-                foreach (var child in children.Files)
-                {
-                    //TList.Add(service.Files.Get(child.Id).Execute());
-                    TList.Add(child);
-                }
-                request.PageToken = children.NextPageToken;
-            } while (!String.IsNullOrEmpty(request.PageToken));
+                //TList.Add(service.Files.Get(child.Id).Execute());
+                TList.Add(new FolderTempClass { FolderID = child.FolderID, ParentID = child.ParentID, FolderName = child.FolderName, MimeType = child.MimeType });
+            }
 
             return TList;
+        }
+
+        private void getHierarchy(FolderTempClass Res, List<FolderListClass> _folders, List<FolderTempClass> _folderObject)
+        {
+            if (Res.MimeType == "application/vnd.google-apps.folder")
+            {
+                _folders.Add(new FolderListClass { id = Res.FolderID, text = Res.FolderName });
+
+                foreach (var res in ResFromFolder(_folderObject, Res.FolderID))
+                {
+                    List<FolderListClass> _tempList = (from k in _folders where k.id == Res.FolderID select k.children).Single();
+                    getHierarchy(res, _tempList, _folderObject);
+                }
+
+            }
+
         }
 
         public static List<Google.Apis.Drive.v3.Data.File> ResFromFiles(DriveService service, string folderId)
@@ -228,20 +287,7 @@ namespace WebApplication1.Controllers
             return TList;
         }
 
-        private static void getHierarchy(Google.Apis.Drive.v3.Data.File Res, DriveService driveService, StringBuilder sb, List<FolderListClass> _folders)
-        {
-            if (Res.MimeType == "application/vnd.google-apps.folder")
-            {
-                _folders.Add(new FolderListClass { id = Res.Id, text = Res.Name });
 
-                foreach (var res in ResFromFolder(driveService, Res.Id).ToList())
-                {
-                    List<FolderListClass> _tempList = (from k in _folders where k.id == Res.Id select k.children).Single();
-                    getHierarchy(res, driveService, sb, _tempList);
-                }
-
-            }
-        }
 
         private static void getHierarchyFiles(Google.Apis.Drive.v3.Data.File Res, DriveService driveService, List<string> _files)
         {
@@ -255,12 +301,11 @@ namespace WebApplication1.Controllers
             }
         }
 
-
         #endregion
 
     }
 
-    class FolderListClass
+    public class FolderListClass
     {
         public string id { get; set; }
         public string text { get; set; }
@@ -272,9 +317,17 @@ namespace WebApplication1.Controllers
         }
     }
 
-    class CustomJsonFolderModel
+    public class CustomJsonFolderModel
     {
         public string id { get; set; }
         public string text { get; set; }
+    }
+
+    public class FolderTempClass
+    {
+        public string FolderID { get; set; }
+        public string FolderName { get; set; }
+        public string ParentID { get; set; }
+        public string MimeType { get; set; }
     }
 }
